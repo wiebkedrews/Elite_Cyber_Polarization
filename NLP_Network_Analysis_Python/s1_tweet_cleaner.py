@@ -15,8 +15,12 @@ Before running this script, users must:
 2. Create a file called:
        data/tweets_rehydrated.parquet
 3. Ensure that this file contains the columns:
+       id
+       user_id
        created_at
        text_translated
+       action
+       action_id
 
 For machine translation, we used the Python package:
 deep-translator (version 1.11.4)
@@ -84,12 +88,34 @@ def clean_text(text):
 # Load rehydrated tweets
 df = pd.read_parquet(INPUT_FILE)
 
+required_columns = [
+    "id",
+    "user_id",
+    "created_at",
+    "text_translated",
+    "action",
+    "action_id",
+]
+
+missing_columns = [col for col in required_columns if col not in df.columns]
+
+if missing_columns:
+    raise ValueError(
+        f"Missing required column(s): {missing_columns}. "
+        "Please rehydrate the tweets, reconstruct retweet information, "
+        "and machine translate the tweet text first."
+    )
+
+
 # Keep only required columns
 df = df[
     [
         "id",
+        "user_id",
         "created_at",
         "text_translated",
+        "action",
+        "action_id",
         "name",
         "username",
         "day",
@@ -118,6 +144,8 @@ df = df[
 
 # Convert IDs to string
 df["id"] = df["id"].astype(str)
+df["user_id"] = df["user_id"].astype(str)
+df["action_id"] = df["action_id"].astype(str)
 
 # Clean tweets
 df["text_clean"] = df["text_translated"].apply(clean_text)
