@@ -1,84 +1,224 @@
-# Battle of words: Dynamics of echo chambers among political elites
+# Cyber-Polarization among Political Elites in a Geopolitical Crisis
 
-This repository contains the replication files for the article *“Battle of words: Dynamics of echo chambers among political elites”* by Wiebke Drews, Joris Frese, Hilke Brockmann, Pedro Fierro, Daniel Triana, and Andreas Dafnos.
+This repository contains the replication files for the article *“Cyber-Polarization among Political Elites in a Geopolitical Crisis”* by Wiebke Drews, Joris Frese, Hilke Brockmann, Pedro Fierro, Andreas Dafnos, and Daniel Triana.
 
 ---
 
-## Data Availability
+# Data Availability
 
-Due to Twitter’s/X’s Terms of Service, raw tweet text and associated metadata cannot be shared.  
+Due to X/Twitter Terms of Service, raw tweet text and associated metadata cannot be shared.
+
 To ensure reproducibility, we provide:
 
-- **Tweet IDs** underlying all analyses (can be rehydrated via the X API)  
-- **Enriched datasets** containing additional characteristics of Members of the European Parliament (MEPs) and European Commissioners, excluding tweet text  
-- Data are stored in formats suitable for GitHub (Parquet for Python, split RData files for R, each <25MB)  
+- **Tweet IDs** underlying all analyses (rehydratable via the X API)
+- **Enriched datasets** containing additional characteristics of Members of the European Parliament (MEPs) and European Commissioners, excluding tweet text
+- Data are stored in formats suitable for GitHub:
+  - `.parquet` for Python
+  - split `.RData` files for R (each <25 MB)
+
+The main replication dataset is:
+
+- `tweet_ids_enriched.parquet`
+
+This dataset contains:
+- tweet IDs
+- user IDs
+- party affiliation
+- country
+- ideological variables
+- demographic characteristics
+- additional enrichment variables used throughout the analysis
 
 ---
 
-## Workflow Overview
+# Rehydration and Translation
 
-The analysis proceeds in two main stages:
+Before running the Python pipeline, users must:
 
-### 1. NLP & Network Analysis (Python)
+1. Rehydrate the tweets using the provided tweet IDs and the X API
+2. Create a file called:
 
-Folder: **`NLP_Network_Analysis_Python/`**  
+```text
+data/tweets_rehydrated.parquet
+```
 
-This step processes the raw tweets (after rehydration), classifies them by topic, constructs networks and embeddings, calculates the Echo Chamber Score, and estimates sentiment.  
+This file must contain at least:
+- `id`
+- `user_id`
+- `created_at`
+- `text_translated`
+- `action`
+- `action_id`
 
-**Input dataset**:  
-- `tweet_ids_enriched.parquet`  
-  - Contains Tweet IDs (rehydratable via API)  
-  - Includes enriched variables on MEPs and Commissioners (e.g., party, country, demographics)  
+The tweet text was machine translated prior to analysis using:
 
-**Scripts (to be run sequentially):**  
-1. `s1_tweet_cleaner.py` – Cleans and prepares raw tweets (after rehydration)  
-2. `s2_topic_analysis.py` – Classifies tweets into topics using BERTopic  
-3. `s3_network_analysis.py` – Builds retweet and mention networks among political elites  
-4. `s4_ideology_detection.py` – Assigns ideological positions to MEPs  
-5. `s5_echo_chamber_score.py` – Calculates a novel Echo Chamber Score based on embedding distances  
-6. `s6_sentiment_analysis.py` – Detects sentiment in tweets using VADER  
+- `deep-translator` (version 1.11.4)
 
-**Output:**  
-- Topic distributions  
-- Echo Chamber Scores  
-- Sentiment scores
+GitHub repository:
+https://github.com/nidhaloff/deep-translator
 
----
-
-### 2. Statistical Analysis (R)
-
-Folder: **`Statistical_Analysis_R/`**  
-
-This step tests the study’s hypotheses using the outputs from the Python stage.  
-The provided datasets already include the **topics, ECS scores, and sentiment results** produced in Python.  
-
-**Datasets:**  
-- Split into several `.RData` files (each <25 MB)  
-- Automatically merged in the R scripts  
-- Both *new* and *old* datasets are required:  
-  - **New dataset**: includes ECS, VADER, and BERTopic outputs  
-  - **Old dataset**: includes engagement metrics (needed for H3)  
-  - Merging ensures a complete dataset for all tests  
-
-**Scripts:**  
-- `H1H2H3H4.R` – Runs all four hypothesis tests:  
-  - Pairwise comparisons across ideological groups  
-  - Fixed-effects regressions for strategic elite behavior  
-  - Difference-in-differences estimations (e.g., Russian invasion of Ukraine)  
-  - Generation of all figures and tables in the article  
-
-**Project file:**  
-- `Echo Chambers.Rproj` – R project file for convenient replication  
+Due to X/Twitter Terms of Service, translated tweet text cannot be redistributed.
 
 ---
 
-## How to Reproduce
+# Workflow Overview
 
-1. **Rehydrate tweets** using provided IDs and the X API.  
-2. **Run Python scripts** in `NLP_Network_Analysis_Python/` sequentially (`s1` → `s6`) to generate the processed variables.  
-3. **Run R analyses**: open `Echo Chambers.Rproj` in `Statistical_Analysis_R/` and run `H1H2H3H4.R`.  
-   - The script merges the split datasets  
-   - Performs all hypothesis tests  
-   - Produces the tables and figures reported in the article  
+The analysis proceeds in two main stages.
 
-This workflow ensures that all results can be fully replicated despite restrictions on sharing raw X/Twitter data.  
+---
+
+# 1. NLP & Network Analysis (Python)
+
+Folder:
+
+```text
+NLP_Network_Analysis_Python/
+```
+
+This stage:
+- cleans translated tweet text
+- estimates BERTopic topic models
+- constructs elite retweet networks
+- computes user embeddings
+- calculates Echo Chamber Scores (ECS)
+- estimates sentiment
+- computes additional network robustness metrics
+
+---
+
+## Scripts (run sequentially)
+
+### `s1_tweet_cleaner.py`
+Cleans and preprocesses translated tweets after rehydration.
+
+### `s2_topic_analysis.py`
+Runs BERTopic topic modeling and estimates topic dynamics over time.
+
+### `s3_network_analysis.py`
+Constructs retweet networks among political elites.
+
+### `s4_ideology_detection.py`
+Creates user-level embeddings for ideology and ECS analyses.
+
+### `s5_echo_chamber_score.py`
+Calculates Echo Chamber Scores (ECS) using graph autoencoders and embedding distances.
+
+### `s6_sentiment_analysis.py`
+Estimates tweet sentiment using VADER sentiment analysis.
+
+### `s7_transform_network_for_gephi.py`
+Transforms retweet network data into node and edge tables for Gephi visualization.
+
+### `s8_network_metrics.py`
+Computes additional network robustness metrics, including:
+- E-I index
+- assortativity
+- clustering coefficients
+- density
+- transitivity
+- structural hole constraint
+  
+---
+
+## Python Outputs
+
+The Python workflow produces:
+- cleaned tweet datasets
+- BERTopic topic assignments
+- retweet networks
+- user embeddings
+- ECS scores
+- sentiment scores
+- community assignments
+- robustness metrics
+
+---
+
+# 2. Statistical Analysis (R)
+
+Folder:
+
+```text
+Statistical_Analysis_R/
+```
+
+This stage tests the study hypotheses using the outputs produced in Python.
+
+The provided datasets already include:
+- BERTopic outputs
+- ECS scores
+- VADER sentiment scores
+- community assignments
+
+---
+
+## R Datasets
+
+- split into several `.RData` files (each <25 MB)
+- automatically merged in the R scripts
+
+Two dataset generations are required:
+
+### New dataset
+Includes:
+- ECS
+- BERTopic
+- VADER sentiment
+- community variables
+
+### Old dataset
+Includes:
+- engagement metrics
+- legacy variables required for H3 analyses
+
+The R scripts merge these datasets automatically.
+
+---
+
+## R Scripts
+
+### `H1H2H3H4.R`
+
+Runs:
+- pairwise comparisons across ideological groups
+- fixed-effects regressions
+- difference-in-differences models
+- robustness checks
+- table and figure generation
+
+---
+
+## R Project File
+
+```text
+Echo Chambers.Rproj
+```
+
+---
+
+# How to Reproduce
+
+1. Rehydrate tweets using the provided tweet IDs and the X API
+2. Machine translate tweet text
+3. Create:
+
+```text
+data/tweets_rehydrated.parquet
+```
+
+4. Run Python scripts sequentially:
+
+```text
+s1 → s8
+```
+
+5. Run the R analyses:
+   - open `Echo Chambers.Rproj`
+   - run `H1H2H3H4.R`
+
+The scripts:
+- merge the split datasets
+- estimate all models
+- reproduce the article figures and tables
+
+This workflow enables full computational reproducibility while remaining compliant with X/Twitter Terms of Service.
