@@ -1,20 +1,60 @@
+# %%
 ##########################################################
-##### IMPORTANT NOTE: Due to a lack of data (particularly number of Tweets), we cannot calculate the ECS for Ukraine Tweets only for the first period; it works for the second period and the entire period #####
+##### ECHO CHAMBER SCORE ANALYSIS ########################
 ##########################################################
 
+"""
+Replication note
+----------------
+This script calculates Echo Chamber Scores (ECS) for the retweet networks
+created in s3_network_analysis.py and the user-level embeddings created in
+s4_ideology_detection.py.
+
+The ECS implementation builds on the project:
+
+"Quantifying the Echo Chamber Effect: An Embedding Distance-based Approach"
+
+by Faisal Alatawi, Paras Sheth, and Huan Liu.
+
+GitHub repository:
+https://github.com/faalatawi/echo-chamber-score
+
+Expected folder structure:
+
+    results/period_1/
+        edges.csv
+        nodes.csv
+        embeddings.feather
+
+    results/period_2/
+        edges.csv
+        nodes.csv
+        embeddings.feather
+
+    results/all_periods/
+        edges.csv
+        nodes.csv
+        embeddings.feather
+
+The helper files required for ECS calculation must be available in:
+
+    src/load_data.py
+    src/EchoGAE.py
+    src/echo_chamber_measure.py
+"""
+
 # %%
-#import os
-#os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
+# import os
+# os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import json
 import torch
 import random
 import numpy as np
-from sklearn.utils import check_random_state
 import pandas as pd
-import sys
 
-sys.path.insert(1, '/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/') # adjust if necessary
+from pathlib import Path
+from sklearn.utils import check_random_state
 
 from src.load_data import get_data
 from src.EchoGAE import EchoGAE_algorithm
@@ -22,71 +62,108 @@ from src.echo_chamber_measure import EchoChamberMeasure
 
 
 # %%
-seed_value=42
+# Set seed
+seed_value = 42
+
 random.seed(seed_value)
 np.random.seed(seed_value)
 torch.manual_seed(seed_value)
 torch.cuda.manual_seed(seed_value)
 torch.cuda.manual_seed_all(seed_value)
-#torch.backends.cudnn.enabled=True
-#torch.backends.cudnn.benchmark=False
-#torch.backends.cudnn.deterministic=True
-#torch.use_deterministic_algorithms(True)
+
+# torch.backends.cudnn.enabled = True
+# torch.backends.cudnn.benchmark = False
+# torch.backends.cudnn.deterministic = True
+# torch.use_deterministic_algorithms(True)
+
 check_random_state(seed_value)
 
-# NOTE: Yu need to calculate the ECS for each period individually, i.e., add and remove # for the specific periods you are interested in
 
-# Datasets 
+# %%
+# Project paths
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+DATA_PATH = PROJECT_DIR / "data"
+
+PERIOD_1_PATH = PROJECT_DIR / "results" / "period_1"
+PERIOD_2_PATH = PROJECT_DIR / "results" / "period_2"
+ALL_PERIODS_PATH = PROJECT_DIR / "results" / "all_periods"
+
+PERIOD_1_PATH.mkdir(parents=True, exist_ok=True)
+PERIOD_2_PATH.mkdir(parents=True, exist_ok=True)
+ALL_PERIODS_PATH.mkdir(parents=True, exist_ok=True)
+
+
+# %%
+# Choose dataset
+# NOTE: Calculate the ECS for each period individually by selecting the relevant path.
+
 # Period 1
-# ds = '/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/results/period_1/'
+# ds = PERIOD_1_PATH
 
 # Period 2
-# ds = '/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/results/period_2/'
+# ds = PERIOD_2_PATH
 
 # All periods
-ds = '/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/results/all_periods/'
+ds = ALL_PERIODS_PATH
 
 
+# %%
 # Filters
-RES_VALUE = 0.1  # NOTE: Resolution value for community detection, TO DO: manually adjust this until the code works (no error messages) & you have at least two communities
-COMM_SIZE = 3  # NOTE: Minimum number of members in each community, TO DO: find a reference or adjust, i.e., how many members should a community have?
-MIN_DEGREE = 0  # NOTE: Minimum degree each node should have in given RT networks, i.e., number of connections each user / node should have
-MIN_TWEETS = 2  # NOTE: Minimum number of tweets posted in given period
+RES_VALUE = 0.1     # Resolution value for community detection
+COMM_SIZE = 3       # Minimum number of members in each community
+MIN_DEGREE = 0      # Minimum degree each node should have in the RT network
+MIN_TWEETS = 2      # Minimum number of tweets posted in given period
 
 
+# %%
 # ECS metric
 ecs_information = []
 
 print(f"Dataset ({ds}): ", end="")
 
 ds_dict = {}
-ds_dict["dataset"] = ds
+ds_dict["dataset"] = str(ds)
 
 # Get the data
 # NOTE: See https://github.com/pyg-team/pytorch_geometric/issues/92
-G, users_embeddings, community_labels, author_id_to_index_map, users_information = get_data(path=f"{ds}", 
-                                                                                          resolution=RES_VALUE, 
-                                                                                          min_comm_size=COMM_SIZE,
-                                                                                          directed_graph=True, # TO DO: decide whether directed or undirected
-                                                                                          min_degree=MIN_DEGREE,
-                                                                                          min_tweets=MIN_TWEETS)
+G, users_embeddings, community_labels, author_id_to_index_map, users_information = get_data(
+    path=str(ds),
+    resolution=RES_VALUE,
+    min_comm_size=COMM_SIZE,
+    directed_graph=True,
+    min_degree=MIN_DEGREE,
+    min_tweets=MIN_TWEETS
+)
 
 
+# %%
 # Graph information
 ds_dict["number_of_nodes"] = G.number_of_nodes()
 ds_dict["number_of_edges"] = G.number_of_edges()
 ds_dict["number_of_communities"] = len(np.unique(community_labels))
 
+
+# %%
 # ECS
-user_emb = EchoGAE_algorithm(G, user_embeddings=users_embeddings, show_progress=False, hidden_channels=20, 
-                                out_channels=10, epochs=300)
+user_emb = EchoGAE_algorithm(
+    G,
+    user_embeddings=users_embeddings,
+    show_progress=False,
+    hidden_channels=20,
+    out_channels=10,
+    epochs=300
+)
+
 ecm = EchoChamberMeasure(user_emb, community_labels)
 eci = ecm.echo_chamber_index()
+
 ds_dict["echo_chamber_score"] = eci
 
 print(f"ECS = {eci:.3f} -- ", end=" ")
 
-# For communities ECIs and Sizes
+
+# %%
+# Community ECIs and sizes
 sizes = []
 ECSs = []
 
@@ -100,6 +177,7 @@ ds_dict["community_ECIs"] = ECSs
 print("")
 
 
+# %%
 # Create df for "ecs_information"
 ecs_information.append(ds_dict)
 ecs_information_df = pd.DataFrame(ecs_information)
@@ -108,11 +186,12 @@ ecs_information_df = pd.DataFrame(ecs_information)
 users_information = users_information[["author_id", "community"]]
 
 # Save results
-ecs_information_df.to_csv(f"{ds}/ecs_information_resolution_{RES_VALUE}.csv", index=False) 
-users_information.to_csv(f"{ds}/users_information.csv", index=False) 
+ecs_information_df.to_csv(ds / f"ecs_information_resolution_{RES_VALUE}.csv", index=False)
+users_information.to_csv(ds / "users_information.csv", index=False)
 
 
-# Create mappings from community to users and user to community 
+# %%
+# Create mappings from community to users and user to community
 community_to_author_ids_map = {}
 author_id_to_community_map = {}
 
@@ -125,80 +204,100 @@ for author_id, community_label in zip(author_ids, community_labels):
     author_id_to_community_map[str(author_id)] = f"Community_{community_label}"
 
 # Save "community_to_author_ids_map"
-with open(f"{ds}/" + "community_to_author_ids_map.json", "w") as json_file:
+with open(ds / "community_to_author_ids_map.json", "w") as json_file:
     json.dump(community_to_author_ids_map, json_file)
 
-# Save "author_id_to_community_map" 
-with open(f"{ds}/" + "author_id_to_community_map.json", "w") as json_file:
-    json.dump(author_id_to_community_map, json_file)  
+# Save "author_id_to_community_map"
+with open(ds / "author_id_to_community_map.json", "w") as json_file:
+    json.dump(author_id_to_community_map, json_file)
 
 print("\n\n")
 
 
 # %%
-# Merge community information with original data set
-# Period 2 incl topics
+##########################################################
+##### MERGE COMMUNITY INFORMATION WITH TWEET DATA ########
+##########################################################
 
-# Read the CSV and Feather files
-users_information_df_p2 = pd.read_csv('/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/results/period_2/users_information.csv')
-tweets_df = pd.read_feather('/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/data/bigsss_tweets_w_topic.feather')
+# Load tweet data
+tweets_df = pd.read_parquet(DATA_PATH / "tweets_cleaned.parquet")
 
-# Rename 'user_id' to 'author_id' in users_information_df_p2 for the rest of the analysis
-users_information_df_p2 = users_information_df_p2.rename(columns={'author_id': 'user_id'})
+required_columns = ["user_id"]
+missing_columns = [col for col in required_columns if col not in tweets_df.columns]
 
-# Convert 'user_id' in both DataFrames to the same data type
-# Choose str or int based on your data context
-tweets_df['user_id'] = tweets_df['user_id'].astype(str)
-users_information_df_p2['user_id'] = users_information_df_p2['user_id'].astype(str)
+if missing_columns:
+    raise ValueError(
+        f"Missing required column(s): {missing_columns}. "
+        "Please make sure tweets_cleaned.parquet was produced by s1_tweet_cleaner.py."
+    )
 
-# Merge the DataFrames on 'user_id'
-merged_df = pd.merge(tweets_df, users_information_df_p2[['user_id', 'community']], on='user_id', how='left')
+tweets_df["user_id"] = tweets_df["user_id"].astype(str)
 
-# Rename 'community' column to 'community_period_2_russo_ukraine'
-merged_df.rename(columns={'community': 'community_period_2_russo_ukraine'}, inplace=True)
 
-# Change the values 0.0 into 0 and 1.0 into 1 while preserving NaN values
-merged_df['community_period_2_russo_ukraine'] = merged_df['community_period_2_russo_ukraine'].astype('Int64')
+# %%
+# Merge community information: Period 2
+users_information_df_p2 = pd.read_csv(PERIOD_2_PATH / "users_information.csv")
 
-# Get the distribution of 'community_period_2_russo_ukraine'
-community_distribution = merged_df['community_period_2_russo_ukraine'].value_counts(dropna=False)
+# Rename author_id to user_id for merging with tweet data
+users_information_df_p2 = users_information_df_p2.rename(columns={"author_id": "user_id"})
+
+# Convert user_id in both DataFrames to the same data type
+users_information_df_p2["user_id"] = users_information_df_p2["user_id"].astype(str)
+
+# Merge the DataFrames on user_id
+merged_df = pd.merge(
+    tweets_df,
+    users_information_df_p2[["user_id", "community"]],
+    on="user_id",
+    how="left"
+)
+
+# Rename community column
+merged_df.rename(columns={"community": "community_period_2"}, inplace=True)
+
+# Change values to nullable integer while preserving NaN values
+merged_df["community_period_2"] = merged_df["community_period_2"].astype("Int64")
+
+# Get the distribution
+community_distribution = merged_df["community_period_2"].value_counts(dropna=False)
 
 # Print the distribution
 print(community_distribution)
 
 
 # %%
-# Merge community info w/ original data set
-# Whole Period incl topics
+# Merge community information: All periods
+users_information_df_all = pd.read_csv(ALL_PERIODS_PATH / "users_information.csv")
 
-# Read the CSV and Feather files
-users_information_df_3 = pd.read_csv('/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/results/all_periods/users_information.csv')
+# Rename author_id to user_id for merging with tweet data
+users_information_df_all = users_information_df_all.rename(columns={"author_id": "user_id"})
 
-# Rename 'user_id' to 'author_id' in users_information_df_p3 for the rest of the analysis
-users_information_df_p3 = users_information_df_3.rename(columns={'author_id': 'user_id'})
+# Convert user_id in both DataFrames to the same data type
+users_information_df_all["user_id"] = users_information_df_all["user_id"].astype(str)
 
-# Convert 'user_id' in both DataFrames to the same data type
-# Choose str or int based on your data context
-users_information_df_p3['user_id'] = users_information_df_p3['user_id'].astype(str)
+# Merge the DataFrames on user_id
+merged_df = pd.merge(
+    merged_df,
+    users_information_df_all[["user_id", "community"]],
+    on="user_id",
+    how="left"
+)
 
-# Merge the DataFrames on 'user_id'
-merged_df = pd.merge(merged_df, users_information_df_p3[['user_id', 'community']], on='user_id', how='left')
+# Rename community column
+merged_df.rename(columns={"community": "community_all_periods"}, inplace=True)
 
-# Rename 'community' column to 'community_period_2_russo_ukraine'
-merged_df.rename(columns={'community': 'community_all_periods_russo_ukraine'}, inplace=True)
+# Change values to nullable integer while preserving NaN values
+merged_df["community_all_periods"] = merged_df["community_all_periods"].astype("Int64")
 
-# Change the values 0.0 into 0 and 1.0 into 1 while preserving NaN values
-merged_df['community_all_periods_russo_ukraine'] = merged_df['community_all_periods_russo_ukraine'].astype('Int64')
-
-# Get the distribution of 'community_period_2_russo_ukraine'
-community_distribution = merged_df['community_all_periods_russo_ukraine'].value_counts(dropna=False)
+# Get the distribution
+community_distribution = merged_df["community_all_periods"].value_counts(dropna=False)
 
 # Print the distribution
 print(community_distribution)
 
 
 # %%
-# Save the DataFrame as a Feather file
-merged_df.to_feather('/root/data/bigsss/analysis_drews/bigsss_russo_ukraine/with_topics/data/bigsss_tweets_w_topic_community.feather')
+# Save the DataFrame
+merged_df.to_parquet(DATA_PATH / "tweets_cleaned_community.parquet", index=False)
 
 # %%
