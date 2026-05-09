@@ -14,7 +14,8 @@ Before running this script, users must:
 1. Rehydrate the tweets using the shared tweet IDs.
 2. Create a file called:
        data/tweets_rehydrated.parquet
-3. Ensure that this file contains a column called:
+3. Ensure that this file contains the columns:
+       created_at
        text_translated
 
 For machine translation, we used the Python package:
@@ -87,6 +88,7 @@ df = pd.read_parquet(INPUT_FILE)
 df = df[
     [
         "id",
+        "created_at",
         "text_translated",
         "name",
         "username",
